@@ -20,6 +20,7 @@
 
 #include "System.h"
 #include "Converter.h"
+#include "vbee_manager.h"
 #include <thread>
 #include <pangolin/pangolin.h>
 #include <iomanip>
@@ -108,6 +109,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mStrVocabularyFilePath = strVocFile;
 
     bool loadedAtlas = false;
+
+    mpVBEEManager = new VBEEManager();
 
     if(mStrLoadAtlasFromFile.empty())
     {

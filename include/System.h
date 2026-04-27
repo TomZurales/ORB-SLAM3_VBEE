@@ -39,6 +39,7 @@
 #include "Viewer.h"
 #include "ImuTypes.h"
 #include "Settings.h"
+#include "vbee_manager.h"
 
 
 namespace ORB_SLAM3
@@ -229,6 +230,8 @@ private:
 
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
+
+    VBEEManager* mpVBEEManager;
 
     // System threads: Local Mapping, Loop Closing, Viewer.
     // The Tracking thread "lives" in the main execution thread that creates the System object.
