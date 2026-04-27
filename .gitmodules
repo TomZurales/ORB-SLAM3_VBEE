@@ -1,0 +1,3 @@
+[submodule "Thirdparty/libVBEE"]
+	path = Thirdparty/libVBEE
+	url = https://github.com/TomZurales/libVBEE
