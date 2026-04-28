@@ -189,6 +189,9 @@ void Viewer::Run()
     pangolin::Var<bool> menuStep("menu.Step",false,false);
 
     pangolin::Var<bool> menuShowOptLba("menu.Show LBA opt", false, true);
+    pangolin::Var<bool> menuColorPE("menu.Color: P(E)", true, true);
+    pangolin::Var<bool> menuColorDirection("menu.Color: Direction", false, true);
+    pangolin::Var<bool> menuSelectRandomMP("menu.Select Random MP", false, false);
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
                 pangolin::ProjectionMatrix(1024,768,mViewpointF,mViewpointF,512,389,0.1,1000),
@@ -312,6 +315,36 @@ void Viewer::Run()
         mpMapDrawer->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph || menuShowInertialGraph || menuShowOptLba)
             mpMapDrawer->DrawKeyFrames(menuShowKeyFrames,menuShowGraph, menuShowInertialGraph, menuShowOptLba);
+        if(pangolin::Pushed(menuSelectRandomMP))
+        {
+            Map* pMap = mpMapDrawer->mpAtlas->GetCurrentMap();
+            if(pMap)
+            {
+                vector<MapPoint*> vpMPs = pMap->GetAllMapPoints();
+                vector<MapPoint*> vpValid;
+                for(MapPoint* pMP : vpMPs)
+                    if(pMP && !pMP->isBad())
+                        vpValid.push_back(pMP);
+
+                if(!vpValid.empty())
+                {
+                    MapPoint* pMP = vpValid[rand() % vpValid.size()];
+                    mpMapDrawer->mpSelectedMapPoint = pMP;
+                    Eigen::Vector3f pos = pMP->GetWorldPos();
+                    cout << "Selected MapPoint " << pMP->mnId
+                         << " at (" << pos(0) << ", " << pos(1) << ", " << pos(2) << ")" << endl;
+                }
+            }
+        }
+
+        if((bool)menuColorDirection) {
+            menuColorPE = false;
+            mpMapDrawer->mColorMode = MapDrawer::DIRECTION;
+        } else {
+            menuColorPE = true;
+            mpMapDrawer->mColorMode = MapDrawer::PE;
+        }
+
         if(menuShowPoints)
             mpMapDrawer->DrawMapPoints();
 

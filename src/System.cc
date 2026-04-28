@@ -21,8 +21,11 @@
 #include "System.h"
 #include "Converter.h"
 #include "KeyFrame.h"
+#include "Optimizer.h"
 #include "vbee_manager.h"
+#include "observation.h"
 #include <thread>
+#include <unordered_set>
 #include <pangolin/pangolin.h>
 #include <iomanip>
 #include <openssl/md5.h>
@@ -111,7 +114,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     bool loadedAtlas = false;
 
-    mpVBEEManager = new VBEEManager();
+    mpVBEEManager = new VBEE::Manager();
+    MapPoint::mpVBEEManager = mpVBEEManager;
 
     if(mStrLoadAtlasFromFile.empty())
     {
@@ -187,7 +191,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     //Create Drawers. These are used by the Viewer
     mpFrameDrawer = new FrameDrawer(mpAtlas);
-    mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_);
+    mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_, mpVBEEManager);
 
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
@@ -1551,6 +1555,16 @@ string System::CalculateCheckSum(string filename, int type)
 
 void System::EndEpisode()
 {
+    mpLocalMapper->RequestStop();
+    while(!mpLocalMapper->isStopped())
+        usleep(1000);
+
+    Map* pActiveMap = mpAtlas->GetCurrentMap();
+    if(pActiveMap->isImuInitialized())
+        Optimizer::FullInertialBA(pActiveMap, 7, false, 0, nullptr);
+    else
+        Optimizer::GlobalBundleAdjustemnt(pActiveMap, 10, nullptr, 0, false);
+
     // Get all the new keyframes created since the last episode
     std::vector<KeyFrame*> new_kfs = mpAtlas->GetCurrentMap()->GetAllKeyFrames();
 
@@ -1561,9 +1575,73 @@ void System::EndEpisode()
                                     [this](KeyFrame* kf){ return kf->mnId <= lastEpisodeEndKFId; }),
                      new_kfs.end());
     }
-    lastEpisodeEndKFId = new_kfs.empty() ? lastEpisodeEndKFId : new_kfs.back()->mnId;
+    auto max_id = std::max_element(new_kfs.begin(), new_kfs.end(),
+                                   [](KeyFrame* a, KeyFrame* b){ return a->mnId < b->mnId; });
+    lastEpisodeEndKFId = new_kfs.empty() ? lastEpisodeEndKFId : (*max_id)->mnId;
 
-    std::cout << "End of episode. Number of new keyframes: " << new_kfs.size() << std::endl;
+    std::vector<MapPoint*> allMapPoints = mpAtlas->GetCurrentMap()->GetAllMapPoints();
+
+    std::vector<VBEE::Observation> observations;
+
+    // For each new keyframe, get a list of seen and unseen map points
+    for(KeyFrame* kf : new_kfs)
+    {
+        if(!kf || kf->isBad())
+            continue;
+
+        // Seen: map points positively matched in this keyframe
+        std::unordered_set<MapPoint*> seenSet;
+        for(MapPoint* mp : kf->GetMapPointMatches())
+            if(mp && !mp->isBad())
+                seenSet.insert(mp);
+
+        std::vector<MapPoint*> seen_mps(seenSet.begin(), seenSet.end());
+
+        // Unseen: map points that project onto the sensor but were not matched
+        std::vector<MapPoint*> not_seen_mps;
+        for(MapPoint* mp : allMapPoints)
+        {
+            if(!mp || mp->isBad() || seenSet.count(mp))
+                continue;
+
+            cv::Point2f kp;
+            float u, v;
+            if(kf->ProjectPointDistort(mp, kp, u, v) && kf->IsInImage(u, v))
+                not_seen_mps.push_back(mp);
+        }
+
+        // Add the observations to the list
+        for(MapPoint* mp : seen_mps)
+        {
+            Eigen::Vector3f relative_viewpoint = kf->GetCameraCenter() - mp->GetWorldPos();
+            observations.push_back({mp->mnId, relative_viewpoint, true});
+        }
+
+        for(MapPoint* mp : not_seen_mps)
+        {
+            Eigen::Vector3f relative_viewpoint = kf->GetCameraCenter() - mp->GetWorldPos();
+            observations.push_back({mp->mnId, relative_viewpoint, false});
+        }
+    }
+    auto to_delete = mpVBEEManager->update(observations);
+
+    for(auto mp : mpAtlas->GetCurrentMap()->GetAllMapPoints())
+    {
+        if(!mp || mp->isBad())
+            continue;
+
+        
+        
+        if(to_delete.count(mp->mnId))
+            mp->SetBadFlag();
+    }
+
+    if(pActiveMap->isImuInitialized())
+        Optimizer::FullInertialBA(pActiveMap, 7, false, 0, nullptr);
+    else
+        Optimizer::GlobalBundleAdjustemnt(pActiveMap, 10, nullptr, 0, false);
+
+    mpLocalMapper->Release();
 }
 
 } //namespace ORB_SLAM

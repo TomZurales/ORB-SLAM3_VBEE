@@ -136,15 +136,15 @@ add_executable(stereo_vbee_baseline
         Examples/VBEE/stereo_vbee_baseline.cc)
 target_link_libraries(stereo_vbee_baseline ${PROJECT_NAME})
 
-add_executable(stereo_vbee_knn
-        Examples/VBEE/stereo_vbee_baseline.cc)
-target_link_libraries(stereo_vbee_knn ${PROJECT_NAME})
+# add_executable(stereo_vbee_knn
+#         Examples/VBEE/stereo_vbee_baseline.cc)
+# target_link_libraries(stereo_vbee_knn ${PROJECT_NAME})
 
-add_executable(stereo_vbee_boundary
-        Examples/VBEE/stereo_vbee_baseline.cc)
-target_link_libraries(stereo_vbee_boundary ${PROJECT_NAME})
+# add_executable(stereo_vbee_boundary
+#         Examples/VBEE/stereo_vbee_baseline.cc)
+# target_link_libraries(stereo_vbee_boundary ${PROJECT_NAME})
 
-add_executable(stereo_vbee_boundary_ransac
-        Examples/VBEE/stereo_vbee_baseline.cc)
-target_link_libraries(stereo_vbee_boundary_ransac ${PROJECT_NAME})
+# add_executable(stereo_vbee_boundary_ransac
+#         Examples/VBEE/stereo_vbee_baseline.cc)
+# target_link_libraries(stereo_vbee_boundary_ransac ${PROJECT_NAME})
 

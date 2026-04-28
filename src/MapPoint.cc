@@ -18,6 +18,7 @@
 
 #include "MapPoint.h"
 #include "ORBmatcher.h"
+#include "vbee_manager.h"
 
 #include<mutex>
 
@@ -26,6 +27,7 @@ namespace ORB_SLAM3
 
 long unsigned int MapPoint::nNextId=0;
 mutex MapPoint::mGlobalMutex;
+VBEE::Manager* MapPoint::mpVBEEManager = nullptr;
 
 MapPoint::MapPoint():
     mnFirstKFid(0), mnFirstFrame(0), nObs(0), mnTrackReferenceForFrame(0),
@@ -297,6 +299,9 @@ void MapPoint::Replace(MapPoint* pMP)
     pMP->ComputeDistinctiveDescriptors();
 
     mpMap->EraseMapPoint(this);
+
+    if(mpVBEEManager)
+        mpVBEEManager->AlertMerge(mnId, pMP->mnId);
 }
 
 bool MapPoint::isBad()

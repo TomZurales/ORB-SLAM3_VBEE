@@ -1023,7 +1023,7 @@ bool KeyFrame::ProjectPointDistort(MapPoint* pMP, cv::Point2f &kp, float &u, flo
     // Check positive depth
     if(PcZ<0.0f)
     {
-        cout << "Negative depth: " << PcZ << endl;
+        // cout << "Negative depth: " << PcZ << endl;
         return false;
     }
 
@@ -1086,7 +1086,7 @@ bool KeyFrame::ProjectPointUnDistort(MapPoint* pMP, cv::Point2f &kp, float &u, f
     // Check positive depth
     if(PcZ<0.0f)
     {
-        cout << "Negative depth: " << PcZ << endl;
+        // cout << "Negative depth: " << PcZ << endl;
         return false;
     }
 

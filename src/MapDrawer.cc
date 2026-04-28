@@ -19,14 +19,17 @@
 #include "MapDrawer.h"
 #include "MapPoint.h"
 #include "KeyFrame.h"
+#include "vbee_manager.h"
 #include <pangolin/pangolin.h>
+#include <algorithm>
 #include <mutex>
 
 namespace ORB_SLAM3
 {
 
 
-MapDrawer::MapDrawer(Atlas* pAtlas, const string &strSettingPath, Settings* settings):mpAtlas(pAtlas)
+MapDrawer::MapDrawer(Atlas* pAtlas, const string &strSettingPath, Settings* settings, VBEE::Manager* pVBEEManager):
+    mpVBEEManager(pVBEEManager), mpAtlas(pAtlas)
 {
     if(settings){
         newParameterLoader(settings);
@@ -132,6 +135,14 @@ bool MapDrawer::ParseViewerParamFile(cv::FileStorage &fSettings)
     return !b_miss_params;
 }
 
+void MapDrawer::peHeatmap(float pe, float& r, float& g, float& b, float redThreshold)
+{
+    float t = std::max((pe - redThreshold) / (1.0f - redThreshold), 0.0f);
+    r = (t < 0.5f) ? 1.0f : 2.0f * (1.0f - t);
+    g = (t < 0.5f) ? 2.0f * t : 1.0f;
+    b = 0.0f;
+}
+
 void MapDrawer::DrawMapPoints()
 {
     Map* pActiveMap = mpAtlas->GetCurrentMap();
@@ -139,40 +150,54 @@ void MapDrawer::DrawMapPoints()
         return;
 
     const vector<MapPoint*> &vpMPs = pActiveMap->GetAllMapPoints();
-    const vector<MapPoint*> &vpRefMPs = pActiveMap->GetReferenceMapPoints();
-
-    set<MapPoint*> spRefMPs(vpRefMPs.begin(), vpRefMPs.end());
-
     if(vpMPs.empty())
         return;
 
+    std::map<unsigned long, float> dataMap;
+    if(mpVBEEManager)
+        dataMap = (mColorMode == DIRECTION) ? mpVBEEManager->getAllDeltas()
+                                            : mpVBEEManager->getAllPE();
+
     glPointSize(mPointSize);
     glBegin(GL_POINTS);
-    glColor3f(0.0,0.0,0.0);
 
-    for(size_t i=0, iend=vpMPs.size(); i<iend;i++)
+    for(size_t i=0, iend=vpMPs.size(); i<iend; i++)
     {
-        if(vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
+        if(vpMPs[i]->isBad())
             continue;
+
+        float r, g, b;
+        auto it = dataMap.find(vpMPs[i]->mnId);
+        if(it != dataMap.end())
+        {
+            if(mColorMode == DIRECTION)
+            {
+                if(it->second < 0.0f)       { r = 1.0f; g = 0.0f; b = 0.0f; }
+                else if(it->second > 0.0f)  { r = 0.0f; g = 1.0f; b = 0.0f; }
+                else                        { r = 0.5f; g = 0.5f; b = 0.5f; }
+            }
+            else
+                peHeatmap(it->second, r, g, b, 0.0f);
+        }
+        else
+            r = g = b = 0.5f;
+
         Eigen::Matrix<float,3,1> pos = vpMPs[i]->GetWorldPos();
-        glVertex3f(pos(0),pos(1),pos(2));
+        glColor3f(r, g, b);
+        glVertex3f(pos(0), pos(1), pos(2));
     }
+
     glEnd();
 
-    glPointSize(mPointSize);
-    glBegin(GL_POINTS);
-    glColor3f(1.0,0.0,0.0);
-
-    for(set<MapPoint*>::iterator sit=spRefMPs.begin(), send=spRefMPs.end(); sit!=send; sit++)
+    if(mpSelectedMapPoint && !mpSelectedMapPoint->isBad())
     {
-        if((*sit)->isBad())
-            continue;
-        Eigen::Matrix<float,3,1> pos = (*sit)->GetWorldPos();
-        glVertex3f(pos(0),pos(1),pos(2));
-
+        Eigen::Matrix<float,3,1> pos = mpSelectedMapPoint->GetWorldPos();
+        glPointSize(mPointSize * 5.0f);
+        glBegin(GL_POINTS);
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glVertex3f(pos(0), pos(1), pos(2));
+        glEnd();
     }
-
-    glEnd();
 }
 
 void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba)

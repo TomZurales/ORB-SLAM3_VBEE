@@ -28,6 +28,8 @@
 
 #include<mutex>
 
+namespace VBEE { class Manager; }
+
 namespace ORB_SLAM3
 {
 
@@ -36,8 +38,14 @@ class Settings;
 class MapDrawer
 {
 public:
+    enum ColorMode { PE, DIRECTION };
+
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    MapDrawer(Atlas* pAtlas, const string &strSettingPath, Settings* settings);
+    MapDrawer(Atlas* pAtlas, const string &strSettingPath, Settings* settings, VBEE::Manager* pVBEEManager = nullptr);
+
+    VBEE::Manager* mpVBEEManager;
+    ColorMode mColorMode = PE;
+    MapPoint* mpSelectedMapPoint = nullptr;
 
     void newParameterLoader(Settings* settings);
 
@@ -53,6 +61,9 @@ public:
 private:
 
     bool ParseViewerParamFile(cv::FileStorage &fSettings);
+    static void peHeatmap(float pe, float& r, float& g, float& b, float redThreshold = 0.75f);
+
+    float mPERedThreshold = 0.75f;
 
     float mKeyFrameSize;
     float mKeyFrameLineWidth;

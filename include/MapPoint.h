@@ -25,6 +25,8 @@
 #include "Map.h"
 #include "Converter.h"
 
+namespace VBEE { class Manager; }
+
 #include "SerializationUtils.h"
 
 #include <opencv2/core/core.hpp>
@@ -163,6 +165,7 @@ public:
 public:
     long unsigned int mnId;
     static long unsigned int nNextId;
+    static VBEE::Manager* mpVBEEManager;
     long int mnFirstKFid;
     long int mnFirstFrame;
     int nObs;
