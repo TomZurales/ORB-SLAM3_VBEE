@@ -20,6 +20,7 @@
 
 #include "System.h"
 #include "Converter.h"
+#include "KeyFrame.h"
 #include "vbee_manager.h"
 #include <thread>
 #include <pangolin/pangolin.h>
@@ -1546,6 +1547,23 @@ string System::CalculateCheckSum(string filename, int type)
     }
 
     return checksum;
+}
+
+void System::EndEpisode()
+{
+    // Get all the new keyframes created since the last episode
+    std::vector<KeyFrame*> new_kfs = mpAtlas->GetCurrentMap()->GetAllKeyFrames();
+
+    if(lastEpisodeEndKFId != -1)
+    {
+        // Remove all keyframes with id <= lastEpisodeEndKFId
+        new_kfs.erase(std::remove_if(new_kfs.begin(), new_kfs.end(),
+                                    [this](KeyFrame* kf){ return kf->mnId <= lastEpisodeEndKFId; }),
+                     new_kfs.end());
+    }
+    lastEpisodeEndKFId = new_kfs.empty() ? lastEpisodeEndKFId : new_kfs.back()->mnId;
+
+    std::cout << "End of episode. Number of new keyframes: " << new_kfs.size() << std::endl;
 }
 
 } //namespace ORB_SLAM

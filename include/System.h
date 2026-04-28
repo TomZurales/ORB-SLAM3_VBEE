@@ -39,8 +39,8 @@
 #include "Viewer.h"
 #include "ImuTypes.h"
 #include "Settings.h"
-#include "vbee_manager.h"
 
+class VBEEManager;
 
 namespace ORB_SLAM3
 {
@@ -265,6 +265,13 @@ private:
     string mStrVocabularyFilePath;
 
     Settings* settings_;
+
+    // Episodic run mode integration
+private:
+    int lastEpisodeEndKFId = -1;
+
+public:
+    void EndEpisode();
 };
 
 }// namespace ORB_SLAM

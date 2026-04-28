@@ -131,3 +131,20 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 add_executable(stereo_euroc
         Examples/Stereo/stereo_euroc.cc)
 target_link_libraries(stereo_euroc ${PROJECT_NAME})
+
+add_executable(stereo_vbee_baseline
+        Examples/VBEE/stereo_vbee_baseline.cc)
+target_link_libraries(stereo_vbee_baseline ${PROJECT_NAME})
+
+add_executable(stereo_vbee_knn
+        Examples/VBEE/stereo_vbee_baseline.cc)
+target_link_libraries(stereo_vbee_knn ${PROJECT_NAME})
+
+add_executable(stereo_vbee_boundary
+        Examples/VBEE/stereo_vbee_baseline.cc)
+target_link_libraries(stereo_vbee_boundary ${PROJECT_NAME})
+
+add_executable(stereo_vbee_boundary_ransac
+        Examples/VBEE/stereo_vbee_baseline.cc)
+target_link_libraries(stereo_vbee_boundary_ransac ${PROJECT_NAME})
+
