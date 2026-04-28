@@ -47,13 +47,14 @@
 ******************************************************************************/
 
 #include "MLPnPsolver.h"
+#include "vbee_manager.h"
 
 #include <Eigen/Sparse>
 
 
 namespace ORB_SLAM3 {
-    MLPnPsolver::MLPnPsolver(const Frame &F, const vector<MapPoint *> &vpMapPointMatches):
-            mnInliersi(0), mnIterations(0), mnBestInliers(0), N(0), mpCamera(F.mpCamera){
+    MLPnPsolver::MLPnPsolver(const Frame &F, const vector<MapPoint *> &vpMapPointMatches, VBEE::Manager* pVBEEManager):
+            mnInliersi(0), mnIterations(0), mnBestInliers(0), N(0), mpCamera(F.mpCamera), mpVBEEManager(pVBEEManager){
         mvpMapPointMatches = vpMapPointMatches;
         mvBearingVecs.reserve(F.mvpMapPoints.size());
         mvP2D.reserve(F.mvpMapPoints.size());
@@ -61,6 +62,9 @@ namespace ORB_SLAM3 {
         mvP3Dw.reserve(F.mvpMapPoints.size());
         mvKeyPointIndices.reserve(F.mvpMapPoints.size());
         mvAllIndices.reserve(F.mvpMapPoints.size());
+
+        // VBEE RANSAC Weighting
+        vbeeWeights.reserve(F.mvpMapPoints.size());
 
         int idx = 0;
         for(size_t i = 0, iend = mvpMapPointMatches.size(); i < iend; i++){
@@ -87,6 +91,8 @@ namespace ORB_SLAM3 {
 
                     mvKeyPointIndices.push_back(i);
                     mvAllIndices.push_back(idx);
+
+                    vbeeWeights.push_back(mpVBEEManager->getPE(pMP->mnId));
 
                     idx++;
                 }
@@ -125,19 +131,50 @@ namespace ORB_SLAM3 {
             vector<int> indexes(mRansacMinSet);
 
 	        // Get min set of points
-	        for(short i = 0; i < mRansacMinSet; ++i)
-	        {
-	            int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
+            if(mpVBEEManager->isWeightRansac())
+            {
+                for(short i = 0; i < mRansacMinSet; ++i)
+                {
+                    float totalWeight = 0.0f;
+                    for(size_t k = 0; k < vAvailableIndices.size(); ++k)
+                        totalWeight += vbeeWeights[vAvailableIndices[k]];
 
-	            int idx = vAvailableIndices[randi];
+                    float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * totalWeight;
+                    float cumWeight = 0.0f;
+                    int pos = static_cast<int>(vAvailableIndices.size()) - 1;
+                    for(size_t k = 0; k < vAvailableIndices.size(); ++k)
+                    {
+                        cumWeight += vbeeWeights[vAvailableIndices[k]];
+                        if(cumWeight > r)
+                        {
+                            pos = static_cast<int>(k);
+                            break;
+                        }
+                    }
 
-                bearingVecs[i] = mvBearingVecs[idx];
-                p3DS[i] = mvP3Dw[idx];
-                indexes[i] = i;
+                    int idx = vAvailableIndices[pos];
+                    bearingVecs[i] = mvBearingVecs[idx];
+                    p3DS[i] = mvP3Dw[idx];
+                    indexes[i] = i;
 
-	            vAvailableIndices[randi] = vAvailableIndices.back();
-	            vAvailableIndices.pop_back();
-	        }
+                    vAvailableIndices[pos] = vAvailableIndices.back();
+                    vAvailableIndices.pop_back();
+                }
+            } else {
+                for(short i = 0; i < mRansacMinSet; ++i)
+                {
+                    int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
+    
+                    int idx = vAvailableIndices[randi];
+    
+                    bearingVecs[i] = mvBearingVecs[idx];
+                    p3DS[i] = mvP3Dw[idx];
+                    indexes[i] = i;
+    
+                    vAvailableIndices[randi] = vAvailableIndices.back();
+                    vAvailableIndices.pop_back();
+                }
+            }
 
             //By the moment, we are using MLPnP without covariance info
             cov3_mats_t covs(1);
@@ -196,6 +233,7 @@ namespace ORB_SLAM3 {
 	                        vbInliers[mvKeyPointIndices[i]] = true;
 	                }
 	                Tout = mRefinedTcw;
+                    mpVBEEManager->addRansacIterationsCount(mnIterations);
 	                return true;
 	            }
 
@@ -215,10 +253,12 @@ namespace ORB_SLAM3 {
 	                    vbInliers[mvKeyPointIndices[i]] = true;
 	            }
 	            Tout = mBestTcw;
+                mpVBEEManager->addRansacIterationsCount(mnIterations);
 	            return true;
 	        }
 	    }
 
+        mpVBEEManager->addRansacIterationsCount(-1);
 	    return false;
 	}
 

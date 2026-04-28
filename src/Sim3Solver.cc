@@ -18,6 +18,7 @@
 
 
 #include "Sim3Solver.h"
+#include "vbee_manager.h"
 
 #include <vector>
 #include <cmath>
@@ -33,9 +34,9 @@ namespace ORB_SLAM3
 
 
 Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> &vpMatched12, const bool bFixScale,
-                       vector<KeyFrame*> vpKeyFrameMatchedMP):
+                       vector<KeyFrame*> vpKeyFrameMatchedMP, VBEE::Manager* pVBEEManager):
     mnIterations(0), mnBestInliers(0), mbFixScale(bFixScale),
-    pCamera1(pKF1->mpCamera), pCamera2(pKF2->mpCamera)
+    pCamera1(pKF1->mpCamera), pCamera2(pKF2->mpCamera), mpVBEEManager(pVBEEManager)
 {
     bool bDifferentKFs = false;
     if(vpKeyFrameMatchedMP.empty())
@@ -64,6 +65,7 @@ Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> 
     Eigen::Vector3f tcw2 = pKF2->GetTranslation();
 
     mvAllIndices.reserve(mN1);
+    vbeeWeights.reserve(mN1);
 
     size_t idx=0;
 
@@ -108,6 +110,8 @@ Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> 
 
             Eigen::Vector3f X3D2w = pMP2->GetWorldPos();
             mvX3Dc2.push_back(Rcw2*X3D2w+tcw2);
+
+            vbeeWeights.push_back(mpVBEEManager->getPS(pMP1->mnId, pKF1->GetCameraCenter() - pMP1->GetWorldPos()));
 
             mvAllIndices.push_back(idx);
             idx++;
@@ -172,17 +176,45 @@ Eigen::Matrix4f Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool>
         vAvailableIndices = mvAllIndices;
 
         // Get min set of points
-        for(short i = 0; i < 3; ++i)
+        if(mpVBEEManager && mpVBEEManager->isWeightRansac() && !vbeeWeights.empty())
         {
-            int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
+            for(short i = 0; i < 3; ++i)
+            {
+                float totalWeight = 0.0f;
+                for(size_t k = 0; k < vAvailableIndices.size(); ++k)
+                    totalWeight += vbeeWeights[vAvailableIndices[k]];
 
-            int idx = vAvailableIndices[randi];
+                float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * totalWeight;
+                float cumWeight = 0.0f;
+                int pos = static_cast<int>(vAvailableIndices.size()) - 1;
+                for(size_t k = 0; k < vAvailableIndices.size(); ++k)
+                {
+                    cumWeight += vbeeWeights[vAvailableIndices[k]];
+                    if(cumWeight > r) { pos = static_cast<int>(k); break; }
+                }
 
-            P3Dc1i.col(i) = mvX3Dc1[idx];
-            P3Dc2i.col(i) = mvX3Dc2[idx];
+                int idx = vAvailableIndices[pos];
+                P3Dc1i.col(i) = mvX3Dc1[idx];
+                P3Dc2i.col(i) = mvX3Dc2[idx];
 
-            vAvailableIndices[randi] = vAvailableIndices.back();
-            vAvailableIndices.pop_back();
+                vAvailableIndices[pos] = vAvailableIndices.back();
+                vAvailableIndices.pop_back();
+            }
+        }
+        else
+        {
+            for(short i = 0; i < 3; ++i)
+            {
+                int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
+
+                int idx = vAvailableIndices[randi];
+
+                P3Dc1i.col(i) = mvX3Dc1[idx];
+                P3Dc2i.col(i) = mvX3Dc2[idx];
+
+                vAvailableIndices[randi] = vAvailableIndices.back();
+                vAvailableIndices.pop_back();
+            }
         }
 
         ComputeSim3(P3Dc1i,P3Dc2i);
@@ -204,6 +236,7 @@ Eigen::Matrix4f Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool>
                 for(int i=0; i<N; i++)
                     if(mvbInliersi[i])
                         vbInliers[mvnIndices1[i]] = true;
+                mpVBEEManager->addRansacIterationsCount(mnIterations);
                 return mBestT12;
             }
         }
@@ -212,6 +245,7 @@ Eigen::Matrix4f Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool>
     if(mnIterations>=mRansacMaxIts)
         bNoMore=true;
 
+    mpVBEEManager->addRansacIterationsCount(-1);
     return Eigen::Matrix4f::Identity();
 }
 
@@ -245,17 +279,45 @@ Eigen::Matrix4f Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool>
         vAvailableIndices = mvAllIndices;
 
         // Get min set of points
-        for(short i = 0; i < 3; ++i)
+        if(mpVBEEManager && mpVBEEManager->isWeightRansac() && !vbeeWeights.empty())
         {
-            int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
+            for(short i = 0; i < 3; ++i)
+            {
+                float totalWeight = 0.0f;
+                for(size_t k = 0; k < vAvailableIndices.size(); ++k)
+                    totalWeight += vbeeWeights[vAvailableIndices[k]];
 
-            int idx = vAvailableIndices[randi];
+                float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * totalWeight;
+                float cumWeight = 0.0f;
+                int pos = static_cast<int>(vAvailableIndices.size()) - 1;
+                for(size_t k = 0; k < vAvailableIndices.size(); ++k)
+                {
+                    cumWeight += vbeeWeights[vAvailableIndices[k]];
+                    if(cumWeight > r) { pos = static_cast<int>(k); break; }
+                }
 
-            P3Dc1i.col(i) = mvX3Dc1[idx];
-            P3Dc2i.col(i) = mvX3Dc2[idx];
+                int idx = vAvailableIndices[pos];
+                P3Dc1i.col(i) = mvX3Dc1[idx];
+                P3Dc2i.col(i) = mvX3Dc2[idx];
 
-            vAvailableIndices[randi] = vAvailableIndices.back();
-            vAvailableIndices.pop_back();
+                vAvailableIndices[pos] = vAvailableIndices.back();
+                vAvailableIndices.pop_back();
+            }
+        }
+        else
+        {
+            for(short i = 0; i < 3; ++i)
+            {
+                int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
+
+                int idx = vAvailableIndices[randi];
+
+                P3Dc1i.col(i) = mvX3Dc1[idx];
+                P3Dc2i.col(i) = mvX3Dc2[idx];
+
+                vAvailableIndices[randi] = vAvailableIndices.back();
+                vAvailableIndices.pop_back();
+            }
         }
 
         ComputeSim3(P3Dc1i,P3Dc2i);
@@ -278,6 +340,7 @@ Eigen::Matrix4f Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool>
                     if(mvbInliersi[i])
                         vbInliers[mvnIndices1[i]] = true;
                 bConverge = true;
+                mpVBEEManager->addRansacIterationsCount(mnIterations);
                 return mBestT12;
             }
             else
@@ -290,6 +353,7 @@ Eigen::Matrix4f Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool>
     if(mnIterations>=mRansacMaxIts)
         bNoMore=true;
 
+    mpVBEEManager->addRansacIterationsCount(-1);
     return bestSim3;
 }
 

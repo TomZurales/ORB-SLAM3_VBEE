@@ -55,12 +55,14 @@
 #include<Eigen/Dense>
 #include<Eigen/Sparse>
 
+namespace VBEE { class Manager; }
+
 namespace ORB_SLAM3{
     class MLPnPsolver {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-        MLPnPsolver(const Frame &F, const vector<MapPoint*> &vpMapPointMatches);
+        MLPnPsolver(const Frame &F, const vector<MapPoint*> &vpMapPointMatches, VBEE::Manager* pVBEEManager = nullptr);
 
         ~MLPnPsolver();
 
@@ -247,6 +249,9 @@ namespace ORB_SLAM3{
         vector<float> mvMaxError;
 
         GeometricCamera* mpCamera;
+
+        VBEE::Manager* mpVBEEManager;
+        std::vector<float> vbeeWeights;
     };
 
 }

@@ -42,6 +42,10 @@
 #include <mutex>
 #include <unordered_set>
 
+namespace VBEE {
+    class Manager;
+}
+
 namespace ORB_SLAM3
 {
 
@@ -59,7 +63,7 @@ class Tracking
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Atlas* pAtlas,
-             KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings, const string &_nameSeq=std::string());
+             KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings, VBEE::Manager* pVBEEManager, const string &_nameSeq=std::string());
 
     ~Tracking();
 
@@ -285,6 +289,9 @@ protected:
 
     //Atlas
     Atlas* mpAtlas;
+
+    // VBEE
+    VBEE::Manager* mpVBEEManager;
 
     //Calibration matrix
     cv::Mat mK;

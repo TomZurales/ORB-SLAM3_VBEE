@@ -16,6 +16,7 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "vbee_manager.h"
 #include<iostream>
 #include<algorithm>
 #include<fstream>
@@ -81,8 +82,10 @@ int main(int argc, char **argv)
     cout << endl << "-------" << endl;
     cout.precision(17);
 
+    VBEE::Manager* pVBEEManager = new VBEE::Manager(true, true);
+
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM3::System SLAM(vocabPath, settingsPath, ORB_SLAM3::System::STEREO, true);
+    ORB_SLAM3::System SLAM(vocabPath, settingsPath, ORB_SLAM3::System::STEREO, pVBEEManager, true);
 
     cv::Mat imLeft, imRight;
     for(int ni=0; ni<nImages; ni++)
@@ -147,6 +150,8 @@ int main(int argc, char **argv)
     }
 
     SLAM.EndEpisode();
+
+    pVBEEManager->saveVBEEStats("VBEEStats.csv");
 
     SLAM.Shutdown();
 

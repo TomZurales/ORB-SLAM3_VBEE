@@ -43,10 +43,10 @@ namespace ORB_SLAM3
 
 Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL;
 
-System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
+System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, VBEE::Manager* pVBEEManager,
                const bool bUseViewer, const int initFr, const string &strSequence):
-    mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
-    mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
+    mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mpVBEEManager(pVBEEManager), mbReset(false),
+    mbResetActiveMap(false), mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
 {
     // Output welcome message
     cout << endl <<
@@ -113,9 +113,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mStrVocabularyFilePath = strVocFile;
 
     bool loadedAtlas = false;
-
-    mpVBEEManager = new VBEE::Manager();
-    MapPoint::mpVBEEManager = mpVBEEManager;
 
     if(mStrLoadAtlasFromFile.empty())
     {
@@ -189,6 +186,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     if (mSensor==IMU_STEREO || mSensor==IMU_MONOCULAR || mSensor==IMU_RGBD)
         mpAtlas->SetInertialSensor();
 
+    MapPoint::mpVBEEManager = mpVBEEManager;
+
     //Create Drawers. These are used by the Viewer
     mpFrameDrawer = new FrameDrawer(mpAtlas);
     mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_, mpVBEEManager);
@@ -197,7 +196,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //(it will live in the main thread of execution, the one that called this constructor)
     cout << "Seq. Name: " << strSequence << endl;
     mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
-                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
+                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, mpVBEEManager, strSequence);
 
     //Initialize the Local Mapping thread and launch
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
@@ -218,7 +217,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     //Initialize the Loop Closing thread and launch
     // mSensor!=MONOCULAR && mSensor!=IMU_MONOCULAR
-    mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR, activeLC); // mSensor!=MONOCULAR);
+    mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR, activeLC, mpVBEEManager); // mSensor!=MONOCULAR);
     mptLoopClosing = new thread(&ORB_SLAM3::LoopClosing::Run, mpLoopCloser);
 
     //Set pointers between threads
@@ -1581,59 +1580,60 @@ void System::EndEpisode()
 
     std::vector<MapPoint*> allMapPoints = mpAtlas->GetCurrentMap()->GetAllMapPoints();
 
-    std::vector<VBEE::Observation> observations;
-
-    // For each new keyframe, get a list of seen and unseen map points
-    for(KeyFrame* kf : new_kfs)
+    if(mpVBEEManager->isInUse())
     {
-        if(!kf || kf->isBad())
-            continue;
+        std::vector<VBEE::Observation> observations;
 
-        // Seen: map points positively matched in this keyframe
-        std::unordered_set<MapPoint*> seenSet;
-        for(MapPoint* mp : kf->GetMapPointMatches())
-            if(mp && !mp->isBad())
-                seenSet.insert(mp);
-
-        std::vector<MapPoint*> seen_mps(seenSet.begin(), seenSet.end());
-
-        // Unseen: map points that project onto the sensor but were not matched
-        std::vector<MapPoint*> not_seen_mps;
-        for(MapPoint* mp : allMapPoints)
+        // For each new keyframe, get a list of seen and unseen map points
+        for(KeyFrame* kf : new_kfs)
         {
-            if(!mp || mp->isBad() || seenSet.count(mp))
+            if(!kf || kf->isBad())
                 continue;
 
-            cv::Point2f kp;
-            float u, v;
-            if(kf->ProjectPointDistort(mp, kp, u, v) && kf->IsInImage(u, v))
-                not_seen_mps.push_back(mp);
-        }
+            // Seen: map points positively matched in this keyframe
+            std::unordered_set<MapPoint*> seenSet;
+            for(MapPoint* mp : kf->GetMapPointMatches())
+                if(mp && !mp->isBad())
+                    seenSet.insert(mp);
 
-        // Add the observations to the list
-        for(MapPoint* mp : seen_mps)
+            std::vector<MapPoint*> seen_mps(seenSet.begin(), seenSet.end());
+
+            // Unseen: map points that project onto the sensor but were not matched
+            std::vector<MapPoint*> not_seen_mps;
+            for(MapPoint* mp : allMapPoints)
+            {
+                if(!mp || mp->isBad() || seenSet.count(mp))
+                    continue;
+
+                cv::Point2f kp;
+                float u, v;
+                if(kf->ProjectPointDistort(mp, kp, u, v) && kf->IsInImage(u, v))
+                    not_seen_mps.push_back(mp);
+            }
+
+            // Add the observations to the list
+            for(MapPoint* mp : seen_mps)
+            {
+                Eigen::Vector3f relative_viewpoint = kf->GetCameraCenter() - mp->GetWorldPos();
+                observations.push_back({mp->mnId, relative_viewpoint, true});
+            }
+
+            for(MapPoint* mp : not_seen_mps)
+            {
+                Eigen::Vector3f relative_viewpoint = kf->GetCameraCenter() - mp->GetWorldPos();
+                observations.push_back({mp->mnId, relative_viewpoint, false});
+            }
+        }
+        auto to_delete = mpVBEEManager->update(observations);
+
+        for(auto mp : mpAtlas->GetCurrentMap()->GetAllMapPoints())
         {
-            Eigen::Vector3f relative_viewpoint = kf->GetCameraCenter() - mp->GetWorldPos();
-            observations.push_back({mp->mnId, relative_viewpoint, true});
+            if(!mp || mp->isBad())
+                continue;
+
+            if(to_delete.count(mp->mnId))
+                mp->SetBadFlag();
         }
-
-        for(MapPoint* mp : not_seen_mps)
-        {
-            Eigen::Vector3f relative_viewpoint = kf->GetCameraCenter() - mp->GetWorldPos();
-            observations.push_back({mp->mnId, relative_viewpoint, false});
-        }
-    }
-    auto to_delete = mpVBEEManager->update(observations);
-
-    for(auto mp : mpAtlas->GetCurrentMap()->GetAllMapPoints())
-    {
-        if(!mp || mp->isBad())
-            continue;
-
-        
-        
-        if(to_delete.count(mp->mnId))
-            mp->SetBadFlag();
     }
 
     if(pActiveMap->isImuInitialized())

@@ -33,6 +33,8 @@
 #include <mutex>
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 
+namespace VBEE { class Manager; }
+
 namespace ORB_SLAM3
 {
 
@@ -52,7 +54,7 @@ public:
 
 public:
 
-    LoopClosing(Atlas* pAtlas, KeyFrameDatabase* pDB, ORBVocabulary* pVoc,const bool bFixScale, const bool bActiveLC);
+    LoopClosing(Atlas* pAtlas, KeyFrameDatabase* pDB, ORBVocabulary* pVoc, const bool bFixScale, const bool bActiveLC, VBEE::Manager* pVBEEManager = nullptr);
 
     void SetTracker(Tracking* pTracker);
 
@@ -239,6 +241,8 @@ protected:
 
     // To (de)activate LC
     bool mbActiveLC = true;
+
+    VBEE::Manager* mpVBEEManager;
 
 #ifdef REGISTER_LOOP
     string mstrFolderLoop;

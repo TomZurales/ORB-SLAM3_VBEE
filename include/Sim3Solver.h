@@ -25,7 +25,7 @@
 
 #include "KeyFrame.h"
 
-
+namespace VBEE { class Manager; }
 
 namespace ORB_SLAM3
 {
@@ -35,7 +35,7 @@ class Sim3Solver
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Sim3Solver(KeyFrame* pKF1, KeyFrame* pKF2, const std::vector<MapPoint*> &vpMatched12, const bool bFixScale = true,
-               const vector<KeyFrame*> vpKeyFrameMatchedMP = vector<KeyFrame*>());
+               const vector<KeyFrame*> vpKeyFrameMatchedMP = vector<KeyFrame*>(), VBEE::Manager* pVBEEManager = nullptr);
 
     void SetRansacParameters(double probability = 0.99, int minInliers = 6 , int maxIterations = 300);
 
@@ -127,6 +127,9 @@ protected:
     //cv::Mat mK2;
 
     GeometricCamera* pCamera1, *pCamera2;
+
+    VBEE::Manager* mpVBEEManager;
+    std::vector<float> vbeeWeights;
 
 };
 
