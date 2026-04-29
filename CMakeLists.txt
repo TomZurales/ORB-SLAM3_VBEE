@@ -125,19 +125,22 @@ ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
 -lcrypto
 VBEE
 )
-target_compile_options(${PROJECT_NAME} PRIVATE -Og)
+target_compile_options(${PROJECT_NAME} PRIVATE -O3)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
 add_executable(stereo_baseline
         Examples/VBEE/stereo_baseline.cc)
 target_link_libraries(stereo_baseline ${PROJECT_NAME})
+target_compile_options(stereo_baseline PRIVATE -O3)
 
 add_executable(stereo_vbee
         Examples/VBEE/stereo_vbee.cc)
 target_link_libraries(stereo_vbee ${PROJECT_NAME})
+target_compile_options(stereo_vbee PRIVATE -O3)
 
 add_executable(stereo_vbee_ransac
         Examples/VBEE/stereo_vbee_ransac.cc)
 target_link_libraries(stereo_vbee_ransac ${PROJECT_NAME})
+target_compile_options(stereo_vbee_ransac PRIVATE -O3)
 

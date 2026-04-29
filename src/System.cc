@@ -1624,7 +1624,7 @@ void System::EndEpisode()
                 observations.push_back({mp->mnId, relative_viewpoint, false});
             }
         }
-        auto to_delete = mpVBEEManager->update(observations);
+        auto to_delete = mpVBEEManager->update(observations, 0.05f); // Threshold can be tuned
 
         for(auto mp : mpAtlas->GetCurrentMap()->GetAllMapPoints())
         {

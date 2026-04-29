@@ -85,7 +85,7 @@ int main(int argc, char **argv)
     VBEE::Manager* pVBEEManager = new VBEE::Manager(true, true);
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM3::System SLAM(vocabPath, settingsPath, ORB_SLAM3::System::STEREO, pVBEEManager, true);
+    ORB_SLAM3::System SLAM(vocabPath, settingsPath, ORB_SLAM3::System::STEREO, pVBEEManager, false);
 
     cv::Mat imLeft, imRight;
     for(int ni=0; ni<nImages; ni++)
